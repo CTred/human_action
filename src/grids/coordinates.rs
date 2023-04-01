@@ -1,5 +1,8 @@
 use bevy::prelude::*;
-use std::ops::{Add, Sub};
+use std::{
+    f32::consts::PI,
+    ops::{Add, BitXor, Sub},
+};
 
 use crate::GridAlign;
 
@@ -38,42 +41,92 @@ pub enum TriangleNeighbours {
 pub struct TriangleCoord {
     pub q: i32,
     pub r: i32,
-    pub side: i8,
+    pub flip: bool,
 }
 impl TriangleCoord {
-    pub fn to_world_pos(&self, primitive: Triangles) -> Vec3 {
-        let ab = primitive.size * 30_f32.to_radians().cos() * 2.0;
-        let height = (3.0_f32.sqrt() / 2.0) * ab;
-        let offset = (self.r % 2) as f32 * (0.5 * ab); // if even rows, shift triangles half size to the left
+    pub fn to_world_pos(&self, primitive: Triangles) -> Transform {
+        let xyz = self.to_vec3(&primitive);
+        let mut t = Transform::from_xyz(xyz.x, xyz.y, xyz.z);
         match primitive.alignment {
-            GridAlign::XY => {
-                return Vec3::new(
-                    self.q as f32 * ab - offset,
-                    self.r as f32 * height,
-                    primitive.layer,
-                )
-            }
-            GridAlign::XZ => {
-                return Vec3::new(
-                    self.q as f32 * ab - offset,
-                    primitive.layer,
-                    self.r as f32 * height,
-                )
-            }
+            GridAlign::XY => t.rotate_z(PI * (self.flip as i32 + self.r) as f32),
+            GridAlign::XZ => t.rotate_y(PI * (self.flip as i32 + self.r) as f32),
         }
+        t
     }
+
+    pub fn to_vec3(&self, primitive: &Triangles) -> Vec3 {
+        let ab = primitive.width();
+        let height = primitive.height();
+        let height_adjust = 2.0 * primitive.size - height;
+        let odd_row = (self.r % 2) != 0; // if odd rows, flip triangles
+        let x = 0.5 * ab * (self.q + self.flip as i32) as f32; // equals (self.q as f32 / 2.0) * ab + (0.5 * ab * self.flip as i8 as f32)
+        let xyz = match primitive.alignment {
+            GridAlign::XY => Vec3::new(
+                x,
+                self.r as f32 * height + (height_adjust * self.flip.bitxor(odd_row) as i8 as f32),
+                primitive.layer,
+            ),
+            GridAlign::XZ => Vec3::new(
+                x,
+                primitive.layer,
+                self.r as f32 * height - (height_adjust * self.flip.bitxor(odd_row) as i8 as f32),
+            ),
+        };
+        xyz
+    }
+
+    pub fn new(q: i32, r: i32, flip: bool) -> TriangleCoord {
+        TriangleCoord { q, r, flip }
+    }
+
+    pub fn new_from_world_pos(pos: Vec3, primitive: &Triangles) -> TriangleCoord {
+        let height = primitive.height();
+        let height_adj = 2.0 * primitive.size - height;
+        let ab = primitive.width();
+        // finding Q
+        let q = ((2.0 * pos.x) / ab).round() as i32;
+        let flip = is_flip(&primitive, &pos, q);
+
+        // finding R
+        let odd_row = match primitive.alignment {
+            GridAlign::XY => is_odd(pos.y, height),
+            GridAlign::XZ => is_odd(pos.z, height),
+        };
+
+        let r_adjust = height_adj * flip.bitxor(odd_row) as i8 as f32;
+        let r = match primitive.alignment {
+            GridAlign::XY => (pos.y - r_adjust / height).round() as i32,
+            GridAlign::XZ => (pos.z + r_adjust / height).round() as i32,
+        };
+        TriangleCoord::new(q, r, flip)
+    }
+}
+
+fn is_odd(y: f32, heigth: f32) -> bool {
+    ((y / heigth).floor() % 2.0).abs() != 0.0
+}
+
+fn is_flip(primitive: &Triangles, pos: &Vec3, q: i32) -> bool {
+    let coord = TriangleCoord::new(q, 0, false);
+    let vec = coord.to_vec3(primitive);
+    let dist = pos.distance_squared(vec);
+
+    let coord_flip = TriangleCoord::new(q - 1, 0, true);
+    let vec_flip = coord_flip.to_vec3(primitive);
+    let dist_flip = pos.distance_squared(vec_flip);
+    dist_flip < dist
 }
 
 impl Coords for TriangleCoord {
     const ZERO: Self = TriangleCoord {
         q: 0,
         r: 0,
-        side: 0,
+        flip: false,
     };
 
     fn distance(&self, other: &Self) -> u32 {
         let dist = *other - *self;
-        (dist.q.abs() + dist.r.abs()) as u32 * 2 + dist.side.abs() as u32
+        (dist.q.abs() + dist.r.abs()) as u32 * 2 + dist.flip as u32
     }
 
     fn neighbours(&self) -> Vec<Self> {
@@ -88,7 +141,7 @@ impl Coords for TriangleCoord {
 impl Eq for TriangleCoord {}
 impl PartialEq for TriangleCoord {
     fn eq(&self, other: &Self) -> bool {
-        self.q == other.q && self.r == other.r && self.side == other.side
+        self.q == other.q && self.r == other.r && self.flip == other.flip
     }
 }
 impl Add for TriangleCoord {

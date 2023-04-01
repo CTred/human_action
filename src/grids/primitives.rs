@@ -9,6 +9,8 @@ use super::coordinates::{HexOrientation, TriangleNeighbours};
 pub trait GridPrimitive {
     fn to_grid(&self, width: u32, height: u32) -> (Mesh, Vec<Vec3>);
     fn to_mesh(&self) -> Mesh;
+    fn width(&self) -> f32;
+    fn height(&self) -> f32;
 }
 
 // PRIMITIVES: TRIANGLE
@@ -49,8 +51,16 @@ impl GridPrimitive for Triangles {
         mesh.set_indices(Some(Indices::U32(indices)));
         mesh
     }
-    fn to_grid(&self, width: u32, height: u32) -> (Mesh, Vec<Vec3>) {
+    fn to_grid(&self, grid_width: u32, grid_height: u32) -> (Mesh, Vec<Vec3>) {
         todo!()
+    }
+
+    fn width(&self) -> f32 {
+        self.size * 30_f32.to_radians().cos() * 2.0
+    }
+
+    fn height(&self) -> f32 {
+        (3.0_f32.sqrt() / 2.0) * self.width()
     }
 }
 
@@ -86,6 +96,14 @@ impl GridPrimitive for Squares {
         };
         mesh.set_indices(Some(Indices::U32(indices)));
         mesh
+    }
+
+    fn width(&self) -> f32 {
+        todo!()
+    }
+
+    fn height(&self) -> f32 {
+        todo!()
     }
 }
 
@@ -134,6 +152,14 @@ impl GridPrimitive for Hexes {
     }
 
     fn to_grid(&self, width: u32, height: u32) -> (Mesh, Vec<Vec3>) {
+        todo!()
+    }
+
+    fn width(&self) -> f32 {
+        todo!()
+    }
+
+    fn height(&self) -> f32 {
         todo!()
     }
 }

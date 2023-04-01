@@ -23,12 +23,12 @@ impl GridConfig<Triangles> {
                 coordinates.push(TriangleCoord {
                     q: i as i32,
                     r: j as i32,
-                    side: 0,
+                    flip: false,
                 });
                 coordinates.push(TriangleCoord {
                     q: i as i32,
                     r: j as i32,
-                    side: 1,
+                    flip: true,
                 });
             }
         }
